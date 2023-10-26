@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-kratos/aegis/circuitbreaker"
-	"github.com/go-kratos/aegis/internal/window"
+	"github.com/zychimne/aegis/circuitbreaker"
+	"github.com/zychimne/aegis/internal/window"
 	"golang.org/x/exp/rand"
 )
 

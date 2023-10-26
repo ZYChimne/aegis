@@ -1,10 +1,10 @@
-module github.com/go-kratos/aegis
+module github.com/zychimne/aegis
 
-go 1.18
+go 1.21
 
 require (
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
 	github.com/google/uuid v1.3.0
+	github.com/jellydator/ttlcache/v3 v3.1.0
 	github.com/shirou/gopsutil/v3 v3.23.2
 	github.com/stretchr/testify v1.8.2
 	github.com/twmb/murmur3 v1.1.6
@@ -20,6 +20,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -6,8 +6,8 @@ package topk
 import (
 	"math"
 
-	"github.com/go-kratos/aegis/internal/minheap"
 	"github.com/twmb/murmur3"
+	"github.com/zychimne/aegis/internal/minheap"
 	"golang.org/x/exp/rand"
 )
 
@@ -128,14 +128,14 @@ func (topk *HeavyKeeper) Add(key string, incr uint32) (string, bool) {
 	var exp string
 	expelled := topk.minHeap.Add(&minheap.Node{Key: key, Count: maxCount})
 	if expelled != nil {
-		topk.expell(Item{Key: expelled.Key, Count: expelled.Count})
+		topk.expel(Item{Key: expelled.Key, Count: expelled.Count})
 		exp = expelled.Key
 	}
 
 	return exp, true
 }
 
-func (topk *HeavyKeeper) expell(item Item) {
+func (topk *HeavyKeeper) expel(item Item) {
 	select {
 	case topk.expelled <- item:
 	default:

@@ -13,9 +13,9 @@ import (
 func benchmarkHotkey(b *testing.B, autoCache bool, writePercent float64, whilelist ...*CacheRuleConfig) {
 	option := &Option{
 		HotKeyCnt:     100,
-		LocalCacheCnt: 100,
+		LocalCacheCap: 100,
 		AutoCache:     autoCache,
-		CacheMs:       100,
+		TTL:           100 * time.Millisecond,
 		WhileList:     whilelist,
 	}
 
@@ -53,9 +53,9 @@ func BenchmarkHotkeyAutoCacheWrite50_100(b *testing.B) {
 func BenchmarkHotkeyFading(b *testing.B) {
 	option := &Option{
 		HotKeyCnt:     6000,
-		LocalCacheCnt: 100,
+		LocalCacheCap: 100,
 		AutoCache:     true,
-		CacheMs:       100,
+		TTL:           100*time.Millisecond,
 	}
 
 	h, err := NewHotkey(option)
@@ -76,26 +76,26 @@ func BenchmarkHotkeyAutoCacheWrite100_100(b *testing.B) {
 
 func BenchmarkHotkeyWhilelist1Write10_100(b *testing.B) {
 	var cacheRules []*CacheRuleConfig
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[0-9]{1,3}", TTLMs: 100})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[0-9]{1,3}", TTL: 100*time.Millisecond})
 	benchmarkHotkey(b, false, 0.1, cacheRules...)
 }
 
 func BenchmarkHotkeyWhilelist5Write10_100(b *testing.B) {
 	var cacheRules []*CacheRuleConfig
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[0-1]{1,3}", TTLMs: 100})
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[2-3]{1,3}", TTLMs: 100})
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[4-5]{1,3}", TTLMs: 100})
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: ".*", TTLMs: 100})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[0-1]{1,3}", TTL: 100*time.Millisecond})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[2-3]{1,3}", TTL: 100*time.Millisecond})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "[4-5]{1,3}", TTL: 100*time.Millisecond})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: ".*", TTL: 100*time.Millisecond})
 	benchmarkHotkey(b, false, 0.1, cacheRules...)
 }
 
 func TestOnlyWhileList(t *testing.T) {
 	var cacheRules []*CacheRuleConfig
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^1[0-9]{2}", TTLMs: 100})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^1[0-9]{2}", TTL: 100*time.Millisecond})
 	option := &Option{
-		LocalCacheCnt: 100,
+		LocalCacheCap: 100,
 		AutoCache:     false,
-		CacheMs:       100,
+		TTL:           100 * time.Millisecond,
 		WhileList:     cacheRules,
 	}
 
@@ -106,14 +106,14 @@ func TestOnlyWhileList(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		key := strconv.FormatInt(int64(i), 10)
 		h.AddWithValue(key, key, 1)
-		_, ok := h.Get(key)
-		assert.False(t, ok, key)
+		val := h.Get(key)
+		assert.Nil(t, val, key)
 	}
 	for i := 100; i < 200; i++ {
 		key := strconv.FormatInt(int64(i), 10)
 		h.AddWithValue(key, key, 1)
-		_, ok := h.Get(key)
-		assert.True(t, ok, key)
+		val := h.Get(key)
+		assert.NotNil(t, val, key)
 	}
 	hots := h.List()
 	assert.Equal(t, 0, len(hots))
@@ -121,12 +121,12 @@ func TestOnlyWhileList(t *testing.T) {
 
 func TestHotkeyWhilelist(t *testing.T) {
 	var cacheRules []*CacheRuleConfig
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^1[0-9]{1,2}", TTLMs: 100})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^1[0-9]{1,2}", TTL: 100*time.Millisecond})
 	option := &Option{
 		HotKeyCnt:     100,
-		LocalCacheCnt: 100,
+		LocalCacheCap: 100,
 		AutoCache:     false,
-		CacheMs:       100,
+		TTL:           100 * time.Millisecond,
 		WhileList:     cacheRules,
 	}
 
@@ -137,27 +137,27 @@ func TestHotkeyWhilelist(t *testing.T) {
 	for i := 100; i < 200; i++ {
 		key := strconv.FormatInt(int64(i), 10)
 		h.AddWithValue(key, key, 1)
-		_, ok := h.Get(key)
-		assert.True(t, ok, key)
+		val := h.Get(key)
+		assert.NotNil(t, val, key)
 	}
 	for i := 200; i < 300; i++ {
 		key := strconv.FormatInt(int64(i), 10)
 		h.AddWithValue(key, key, 1)
-		_, ok := h.Get(key)
-		assert.False(t, ok, key)
+		val := h.Get(key)
+		assert.Nil(t, val, key)
 	}
 }
 
 func TestHotkeyBlacklist(t *testing.T) {
 	var cacheRules []*CacheRuleConfig
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^2$", TTLMs: 100})
-	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^3$", TTLMs: 100})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^2$", TTL: 100*time.Millisecond})
+	cacheRules = append(cacheRules, &CacheRuleConfig{Mode: "pattern", Value: "^3$", TTL: 100*time.Millisecond})
 
 	option := &Option{
 		HotKeyCnt:     100,
-		LocalCacheCnt: 100,
+		LocalCacheCap: 100,
 		AutoCache:     true,
-		CacheMs:       100,
+		TTL:           100 * time.Millisecond,
 		BlackList:     cacheRules,
 	}
 
@@ -172,21 +172,21 @@ func TestHotkeyBlacklist(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		key := strconv.FormatInt(int64(i), 10)
-		_, ok := h.Get(key)
+		val := h.Get(key)
 		if i == 2 || i == 3 {
-			assert.False(t, ok)
+			assert.Nil(t, val)
 		} else {
-			assert.True(t, ok)
+			assert.NotNil(t, val)
 		}
 	}
 }
 
-func TestHotkeyMinCount(t *testing.T) {
+func testHotkeyMinCount(t *testing.T) {
 	option := &Option{
 		HotKeyCnt:     10000,
-		LocalCacheCnt: 10000,
+		LocalCacheCap: 10000,
 		AutoCache:     true,
-		CacheMs:       1000,
+		TTL:           1000 * time.Millisecond,
 		MinCount:      10,
 	}
 
@@ -205,9 +205,9 @@ func TestHotkeyMinCount(t *testing.T) {
 func testHotkeyHit(t *testing.T) {
 	option := &Option{
 		HotKeyCnt:     10000,
-		LocalCacheCnt: 10000,
+		LocalCacheCap: 10000,
 		AutoCache:     true,
-		CacheMs:       1000,
+		TTL:           1000 * time.Millisecond,
 	}
 
 	h, err := NewHotkey(option)
@@ -228,8 +228,8 @@ func testHotkeyHit(t *testing.T) {
 			h.AddWithValue(key, key, 1)
 		} else {
 			total++
-			_, ok := h.Get(key)
-			if ok {
+			val := h.Get(key)
+			if val != nil {
 				hit++
 			}
 		}

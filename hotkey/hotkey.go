@@ -5,25 +5,26 @@ import (
 	"math"
 	"regexp"
 	"sync"
+	"time"
 
-	"github.com/go-kratos/aegis/topk"
+	"github.com/jellydator/ttlcache/v3"
+	"github.com/zychimne/aegis/topk"
 )
 
 type CacheRuleConfig struct {
-	Mode  string `toml:"match_mode"`
-	Value string `toml:"match_value"`
-	TTLMs uint32 `toml:"ttl_ms"`
+	Mode  string        `toml:"match_mode"`
+	Value string        `toml:"match_value"`
+	TTL   time.Duration `toml:"ttl"`
 }
 
 type Option struct {
 	HotKeyCnt     int
-	LocalCacheCnt int
+	LocalCacheCap uint64
 	AutoCache     bool
-	CacheMs       int
+	TTL           time.Duration
 	MinCount      int
 	WhileList     []*CacheRuleConfig
 	BlackList     []*CacheRuleConfig
-	LocalCache    LocalCache
 }
 
 var (
@@ -34,14 +35,14 @@ var (
 type cacheRule struct {
 	value  string
 	regexp *regexp.Regexp
-	ttl    uint32
+	ttl    time.Duration
 }
 
 type HotKeyWithCache struct {
 	topk       topk.Topk
 	mutex      sync.Mutex
 	option     *Option
-	localCache LocalCache
+	localCache *ttlcache.Cache[string, interface{}]
 	whilelist  []*cacheRule
 	blacklist  []*cacheRule
 }
@@ -69,11 +70,9 @@ func NewHotkey(option *Option) (*HotKeyWithCache, error) {
 		}
 	}
 	if h.option.AutoCache || len(h.whilelist) > 0 {
-		if h.option.LocalCache != nil {
-			h.localCache = h.option.LocalCache
-		} else {
-			h.localCache = NewLocalCache(int(h.option.LocalCacheCnt))
-		}
+		h.localCache = ttlcache.New[string, interface{}](
+			ttlcache.WithCapacity[string, interface{}](h.option.LocalCacheCap),
+		)
 	}
 	return h, nil
 }
@@ -81,9 +80,9 @@ func NewHotkey(option *Option) (*HotKeyWithCache, error) {
 func (h *HotKeyWithCache) initCacheRules(rules []*CacheRuleConfig) ([]*cacheRule, error) {
 	list := make([]*cacheRule, 0, len(rules))
 	for _, rule := range rules {
-		ttl := rule.TTLMs
+		ttl := rule.TTL
 		if ttl == 0 {
-			ttl = uint32(h.option.CacheMs)
+			ttl = h.option.TTL
 		}
 		cacheRule := &cacheRule{ttl: ttl}
 		if rule.Mode == ruleTypeKey {
@@ -117,7 +116,7 @@ func (h *HotKeyWithCache) inBlacklist(key string) bool {
 	return false
 }
 
-func (h *HotKeyWithCache) inWhitelist(key string) (uint32, bool) {
+func (h *HotKeyWithCache) inWhitelist(key string) (time.Duration, bool) {
 	if len(h.whilelist) == 0 {
 		return 0, false
 	}
@@ -155,40 +154,41 @@ func (h *HotKeyWithCache) AddWithValue(key string, value interface{}, incr uint3
 		var expelled string
 		expelled, added = h.topk.Add(key, incr)
 		if len(expelled) > 0 && h.localCache != nil {
-			h.localCache.Remove(expelled)
+			h.localCache.Delete(expelled)
 		}
 		if h.option.AutoCache && added {
 			if !h.inBlacklist(key) {
-				h.localCache.Add(key, value, uint32(h.option.CacheMs))
+				h.localCache.Set(key, value, h.option.TTL)
 			}
 			return added
 		}
 	}
 	if ttl, ok := h.inWhitelist(key); ok {
-		h.localCache.Add(key, value, ttl)
+		h.localCache.Set(key, value, ttl)
 	}
 	return added
 }
 
-func (h *HotKeyWithCache) DelCache(key string) {
+func (h *HotKeyWithCache) Del(key string) {
 	if h.localCache == nil {
 		return
 	}
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
-	h.localCache.Remove(key)
+	h.localCache.Delete(key)
 }
 
-func (h *HotKeyWithCache) Get(key string) (interface{}, bool) {
+func (h *HotKeyWithCache) Get(key string) interface{} {
 	if h.localCache == nil {
-		return "", false
+		return nil
 	}
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
-	if v, ok := h.localCache.Get(key); ok {
-		return v, true
+	h.localCache.DeleteExpired()
+	if item := h.localCache.Get(key); item != nil {
+		return item.Value()
 	}
-	return "", false
+	return nil
 }
 
 func (h *HotKeyWithCache) Fading() {
