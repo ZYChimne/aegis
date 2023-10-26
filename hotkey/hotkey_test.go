@@ -181,7 +181,7 @@ func TestHotkeyBlacklist(t *testing.T) {
 	}
 }
 
-func testHotkeyMinCount(t *testing.T) {
+func TestHotkeyMinCount(t *testing.T) {
 	option := &Option{
 		HotKeyCnt:     10000,
 		LocalCacheCap: 10000,
